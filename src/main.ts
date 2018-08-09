@@ -19,7 +19,7 @@ const canvasRenderer = new CanvasRenderer(canvas, chip8.getDisplayWidth(), chip8
 chip8.setRenderer(canvasRenderer)
 
 const xhr = new XMLHttpRequest()
-xhr.open('GET', 'roms/tetris', true)
+xhr.open('GET', 'roms/INVADERS', true)
 xhr.responseType = 'arraybuffer'
 xhr.onload = () => {
   chip8.load(new Uint8Array(xhr.response))
