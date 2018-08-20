@@ -22,6 +22,7 @@ class Chip8 {
   private drawFlag = false
   private renderer?: Renderer
   private keys: { [key: number]: boolean } = {}
+  private speed = 10
 
   constructor() {
     this.reset()
@@ -36,7 +37,6 @@ class Chip8 {
   }
 
   public load(data: Uint8Array) {
-    this.stop()
     this.reset()
 
     for (let index = 0; index < data.length; index++) {
@@ -47,11 +47,36 @@ class Chip8 {
   }
 
   public reset() {
+    this.running = false
+
+    this.resetMemory()
+    this.loadFonts()
+
+    for (let index = 0; index < this.v.length; index++) {
+      this.v[index] = 0
+    }
+
+    this.resetDisplay()
+
+    this.sp = 0
+    this.i = 0
+
+    this.pc = 0x200
+
+    this.delayTimer = 0
+    this.soundTimer = 0
+
+    this.step = 0
+  }
+
+  private resetMemory() {
     for (let index = 0; index < this.memory.length; index++) {
       this.memory[index] = 0
     }
+  }
 
-    const hexChars = [
+  private loadFonts() {
+    const fonts = [
       0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
       0x20, 0x60, 0x20, 0x20, 0x70, // 1
       0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -70,26 +95,9 @@ class Chip8 {
       0xF0, 0x80, 0xF0, 0x80, 0x80 // F
     ]
 
-    for (let index = 0; index < hexChars.length; index++) {
-      this.memory[index] = hexChars[index]
+    for (let index = 0; index < fonts.length; index++) {
+      this.memory[index] = fonts[index]
     }
-
-    for (let index = 0; index < this.v.length; index++) {
-      this.v[index] = 0
-    }
-
-    this.resetDisplay()
-
-    this.sp = 0
-    this.i = 0
-
-    this.pc = 0x200
-
-    this.delayTimer = 0
-    this.soundTimer = 0
-
-    this.step = 0
-    this.running = false
   }
 
   private resetDisplay() {
@@ -99,46 +107,38 @@ class Chip8 {
   }
 
   public start() {
-    const renderer = this.renderer
-    if (!renderer) {
-      throw new Error('missing renderer')
-    }
-
     this.running = true
-
-    const cycleLoop = () => {
-      for (let index = 0; index < 10; index++) {
-        if (this.running) {
-          this.cycle()
-        }
-      }
-
-      if (this.drawFlag) {
-        (renderer as any).render(this.display)
-        this.drawFlag = false
-      }
-
-      if (!(this.step++ % 2)) {
-        this.timers()
-      }
-
-      requestAnimationFrame(cycleLoop)
-    }
-
-    requestAnimationFrame(cycleLoop)
   }
 
-  private timers() {
-    if (this.delayTimer > 0) {
-      this.delayTimer--
+  public cycle() {
+    for (let index = 0; index < this.speed; index++) {
+      if (this.running) {
+        const opcode = this.memory[this.pc] << 8 | this.memory[this.pc + 1]
+        this.perform(opcode)
+      }
     }
 
-    if (this.soundTimer > 0) {
-      if (this.soundTimer == 1) {
-        (this.renderer as any).beep()
-      }
-      this.soundTimer--
+    if (this.drawFlag) {
+      (this.renderer as any).render(this.display)
+      this.drawFlag = false
     }
+
+    this.playSound()
+
+    if (this.running) {
+      this.updateTimers()
+    }
+  }
+
+  private playSound() {
+    if (this.soundTimer > 0) {
+      (this.renderer as any).beep()
+    }
+  }
+
+  private updateTimers() {
+    if (this.delayTimer > 0) this.delayTimer--
+    if (this.soundTimer > 0) this.soundTimer--
   }
 
   public stop() {
@@ -167,8 +167,15 @@ class Chip8 {
     return !this.display[location]
   }
 
-  private cycle() {
-    const opcode = this.memory[this.pc] << 8 | this.memory[this.pc + 1]
+  public setKey(key: number) {
+    this.keys[key] = true
+  }
+
+  public unsetKey(key: number) {
+    delete this.keys[key]
+  }
+
+  private perform(opcode: number) {
     const x = (opcode & 0x0F00) >> 8
     const y = (opcode & 0x00F0) >> 4
 
